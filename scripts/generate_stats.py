@@ -142,12 +142,19 @@ for x, label, value, accent in cards:
     draw.text((x + 28, 105), str(value), font=font(58, True), fill=TEXT)
 
 # Current streak ring.
-cx, cy, radius = 600, 112, 55
+cx, cy, radius = 720, 135, 40
 bbox = (cx-radius, cy-radius, cx+radius, cy+radius)
 draw.ellipse(bbox, outline=GRID, width=7)
+
 if longest:
     extent = int(360 * min(1, current / longest))
-    draw.arc(bbox, start=-90, end=-90 + extent, fill=PINK, width=7)
+    draw.arc(
+        bbox,
+        start=-90,
+        end=-90 + extent,
+        fill=PINK,
+        width=7,
+    )
 
 # Weekly activity.
 sx, sy, sw, sh = 55, 275, 1090, 150
@@ -185,7 +192,7 @@ draw = ImageDraw.Draw(img)
 draw.rounded_rectangle((0, 0, W, H), radius=26, fill=BG)
 draw.text((35, 18), "contribution graph", font=font(18, True), fill=TEXT)
 
-CELL, GAP = 18, 5
+CELL, GAP = 17, 4
 GX, GY = 35, 60
 maximum = max(1, max(days.values()))
 
