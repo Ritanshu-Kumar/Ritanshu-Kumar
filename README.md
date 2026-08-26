@@ -4,11 +4,11 @@
 <tr>
 <td width="58%" valign="middle">
 
-### ML / AI · Full-stack
+### ML / AI · Data Science
 
-I build things around **machine learning, deep learning, and AI applications**.
+I build practical machine learning and AI systems, with a focus on deep learning, NLP, computer vision, and applied data science.
 
-Currently exploring **reinforcement learning and self-play**, while working on projects that mix models, APIs, and actual software.
+From training models to building usable applications, I like turning ideas into working systems that solve real problems. Currently exploring reinforcement learning and self-play through custom environments.
 
 **VIT · Integrated M.Tech CSE · Data Science**
 
