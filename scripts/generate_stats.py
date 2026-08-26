@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Generate the profile analytics SVGs from GitHub GraphQL.
+"""Generate GitHub profile analytics as PNG files.
 
 Outputs:
-  assets/stats.svg  - three metric cards + weekly activity line chart
-  assets/year.svg   - one-year contribution heatmap
+  assets/stats.png - analytics cards + weekly activity
+  assets/year.png  - one-year contribution heatmap
 
-Only the GitHub Actions GITHUB_TOKEN is required.
+Uses GitHub GraphQL and Pillow. The workflow supplies GITHUB_TOKEN.
 """
 import json
 import os
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets"
@@ -21,8 +23,9 @@ TOKEN = os.environ.get("GITHUB_TOKEN")
 if not TOKEN:
     raise SystemExit("GITHUB_TOKEN is required")
 
-now = datetime.now(timezone.utc)
-today = now.date()
+ASSETS.mkdir(parents=True, exist_ok=True)
+
+today = datetime.now(timezone.utc).date()
 start = today - timedelta(days=364)
 
 QUERY = """
@@ -67,13 +70,13 @@ if result.get("errors"):
     raise RuntimeError(result["errors"])
 
 calendar = result["data"]["user"]["contributionsCollection"]["contributionCalendar"]
-days = {}
-for week in calendar["weeks"]:
-    for item in week["contributionDays"]:
-        days[item["date"]] = item["contributionCount"]
+days = {
+    item["date"]: item["contributionCount"]
+    for week in calendar["weeks"]
+    for item in week["contributionDays"]
+}
 
-# Current streak. GitHub's current contribution day counts if it exists;
-# otherwise start from yesterday.
+# Current streak.
 cursor = today if days.get(str(today), 0) else today - timedelta(days=1)
 current = 0
 while days.get(str(cursor), 0) > 0:
@@ -90,28 +93,40 @@ for key in sorted(days):
     else:
         run = 0
 
-# Weekly contribution totals for the line chart.
+# Weekly totals.
 weekly = []
 for i in range(16):
     end = today - timedelta(days=(15 - i) * 7)
-    weekly.append(sum(days.get(str(end - timedelta(days=j)), 0) for j in range(7)))
+    weekly.append(
+        sum(days.get(str(end - timedelta(days=j)), 0) for j in range(7))
+    )
 
-PINK = "#a78bfa"        # primary accent (renamed variable, now purple/violet)
-PINK_LIGHT = "#c4b5fd"
-PINK_DARK = "#4c2d8f"
-PURPLE = "#7c5cff"
-CYAN = "#55d6d2"
-BLUE = "#6aa8ff"
 BG = "#0d0d12"
 PANEL = "#15151d"
 TEXT = "#f5f5f7"
 MUTED = "#9a9aa5"
 GRID = "#292933"
+PINK = "#a78bfa"
+CYAN = "#55d6d2"
+PURPLE = "#7c5cff"
+PINK_LIGHT = "#c4b5fd"
+PINK_DARK = "#4c2d8f"
 
-# ---------- analytics panel ----------
+def font(size, bold=False):
+    candidates = [
+        "C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+    for path in candidates:
+        if Path(path).exists():
+            return ImageFont.truetype(path, size)
+    return ImageFont.load_default()
+
+# ---------- analytics PNG ----------
 W, H = 1200, 500
-svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">']
-svg.append(f'<rect width="{W}" height="{H}" rx="26" fill="{BG}"/>')
+img = Image.new("RGB", (W, H), BG)
+draw = ImageDraw.Draw(img)
 
 cards = [
     (30, "TOTAL CONTRIBUTIONS", calendar["totalContributions"], PINK),
@@ -120,53 +135,56 @@ cards = [
 ]
 
 for x, label, value, accent in cards:
-    svg.extend([
-        f'<rect x="{x}" y="30" width="350" height="170" rx="20" fill="{PANEL}" stroke="{GRID}"/>',
-        f'<circle cx="{x+315}" cy="65" r="8" fill="{accent}"/>',
-        f'<text x="{x+28}" y="72" fill="{MUTED}" font-family="Arial,sans-serif" font-size="15" font-weight="700" letter-spacing="1">{label}</text>',
-        f'<text x="{x+28}" y="142" fill="{TEXT}" font-family="Arial,sans-serif" font-size="58" font-weight="800">{value}</text>',
-    ])
+    draw.rounded_rectangle((x, 30, x + 350, 200), radius=20,
+                           fill=PANEL, outline=GRID, width=1)
+    draw.ellipse((x + 307, 57, x + 323, 73), fill=accent)
+    draw.text((x + 28, 58), label, font=font(15, True), fill=MUTED)
+    draw.text((x + 28, 105), str(value), font=font(58, True), fill=TEXT)
 
-# Circular current-streak ring, inspired by the reference screenshot.
+# Current streak ring.
 cx, cy, radius = 600, 112, 55
-circ = 2 * 3.14159265359 * radius
-progress = min(1.0, current / max(1, longest)) if longest else 0
-svg.extend([
-    f'<circle cx="{cx}" cy="{cy}" r="{radius}" fill="none" stroke="{GRID}" stroke-width="7"/>',
-    f'<circle cx="{cx}" cy="{cy}" r="{radius}" fill="none" stroke="{PINK}" stroke-width="7" stroke-linecap="round" stroke-dasharray="{circ*progress:.1f} {circ:.1f}" transform="rotate(-90 {cx} {cy})"/>',
-])
+bbox = (cx-radius, cy-radius, cx+radius, cy+radius)
+draw.ellipse(bbox, outline=GRID, width=7)
+if longest:
+    extent = int(360 * min(1, current / longest))
+    draw.arc(bbox, start=-90, end=-90 + extent, fill=PINK, width=7)
 
-# Weekly line chart.
+# Weekly activity.
 sx, sy, sw, sh = 55, 275, 1090, 150
+draw.text((55, 235), "weekly activity", font=font(18, True), fill=TEXT)
+for frac in (0, 0.5, 1):
+    y = sy + sh - frac * (sh - 20)
+    draw.line((55, y, 1145, y), fill=GRID, width=1)
+
 maximum = max(1, max(weekly))
 points = []
 for i, value in enumerate(weekly):
     x = sx + i * sw / (len(weekly) - 1)
     y = sy + sh - (value / maximum) * (sh - 20)
-    points.append((x, y))
+    points.append((int(x), int(y)))
 
-svg.append(f'<text x="55" y="245" fill="{TEXT}" font-family="Arial,sans-serif" font-size="18" font-weight="700">weekly activity</text>')
-for yoff in (0, 0.5, 1):
-    y = sy + sh - yoff * (sh - 20)
-    svg.append(f'<line x1="55" y1="{y:.1f}" x2="1145" y2="{y:.1f}" stroke="{GRID}" stroke-width="1"/>')
-
-path = " ".join(("M" if i == 0 else "L") + f" {x:.1f} {y:.1f}" for i, (x, y) in enumerate(points))
-area = path + f" L {points[-1][0]:.1f} {sy+sh} L {points[0][0]:.1f} {sy+sh} Z"
-svg.extend([
-    f'<path d="{area}" fill="{PINK}" opacity="0.08"/>',
-    f'<path d="{path}" fill="none" stroke="{PINK}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
-])
+if len(points) > 1:
+    draw.line(points, fill=PINK, width=4, joint="curve")
 for x, y in points:
-    svg.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="{PINK}"/>')
+    draw.ellipse((x-4, y-4, x+4, y+4), fill=PINK)
 
-svg.extend([
-    f'<text x="55" y="470" fill="{MUTED}" font-family="Arial,sans-serif" font-size="13">last 16 weeks · generated from GitHub</text>',
-    "</svg>",
-])
-(ASSETS / "stats.svg").write_text("\n".join(svg), encoding="utf-8")
+draw.text(
+    (55, 462),
+    "last 16 weeks · generated from GitHub",
+    font=font(13),
+    fill=MUTED,
+)
 
-# ---------- one-year contribution graph ----------
+img.save(ASSETS / "stats.png", "PNG", optimize=True)
+
+# ---------- one-year contribution PNG ----------
 W, H = 1200, 310
+img = Image.new("RGB", (W, H), BG)
+draw = ImageDraw.Draw(img)
+
+draw.rounded_rectangle((0, 0, W, H), radius=26, fill=BG)
+draw.text((35, 18), "contribution graph", font=font(18, True), fill=TEXT)
+
 CELL, GAP = 18, 5
 GX, GY = 35, 60
 maximum = max(1, max(days.values()))
@@ -183,11 +201,6 @@ def heat_color(value):
         return PINK_LIGHT
     return PINK
 
-svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">']
-svg.append(f'<rect width="{W}" height="{H}" rx="26" fill="{BG}"/>')
-svg.append(f'<text x="35" y="35" fill="{TEXT}" font-family="Arial,sans-serif" font-size="18" font-weight="700">contribution graph</text>')
-
-# Sunday-aligned 53-week grid.
 grid_start = start - timedelta(days=(start.weekday() + 1) % 7)
 for col in range(53):
     for row in range(7):
@@ -195,18 +208,27 @@ for col in range(53):
         if start <= day <= today:
             x = GX + col * (CELL + GAP)
             y = GY + row * (CELL + GAP)
-            svg.append(
-                f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" rx="4" fill="{heat_color(days.get(str(day), 0))}"/>'
+            draw.rounded_rectangle(
+                (x, y, x + CELL, y + CELL),
+                radius=4,
+                fill=heat_color(days.get(str(day), 0)),
             )
 
-svg.append(f'<text x="35" y="285" fill="{MUTED}" font-family="Arial,sans-serif" font-size="13">less</text>')
-for i, color in enumerate(["#1b1b23", "#4b2540", PINK_DARK, PINK_LIGHT, PINK]):
-    svg.append(f'<rect x="{70+i*23}" y="273" width="18" height="18" rx="4" fill="{color}"/>')
-svg.extend([
-    f'<text x="188" y="285" fill="{MUTED}" font-family="Arial,sans-serif" font-size="13">more</text>',
-    f'<text x="1010" y="285" fill="{MUTED}" font-family="Arial,sans-serif" font-size="13">{calendar["totalContributions"]} contributions</text>',
-    "</svg>",
-])
-(ASSETS / "year.svg").write_text("\n".join(svg), encoding="utf-8")
+draw.text((35, 272), "less", font=font(13), fill=MUTED)
+legend = ["#1b1b23", "#4b2540", PINK_DARK, PINK_LIGHT, PINK]
+for i, color in enumerate(legend):
+    x = 70 + i * 23
+    draw.rounded_rectangle((x, 270, x + 18, 288), radius=4, fill=color)
+draw.text((188, 272), "more", font=font(13), fill=MUTED)
 
-print(f"Generated stats.svg and year.svg for {LOGIN}")
+total = calendar["totalContributions"]
+text = f"{total} contributions"
+tw = draw.textbbox((0, 0), text, font=font(13))[2]
+draw.text((1165 - tw, 272), text, font=font(13), fill=MUTED)
+
+img.save(ASSETS / "year.png", "PNG", optimize=True)
+
+print(f"Generated stats.png and year.png for {LOGIN}")
+print(f"Total contributions: {calendar['totalContributions']}")
+print(f"Current streak: {current}")
+print(f"Longest streak: {longest}")

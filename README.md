@@ -55,7 +55,7 @@ Currently exploring **reinforcement learning and self-play**, while working on p
 </p>
 
 <p align="center">
-  <img src="./assets/stats.svg?v=initial" width="100%" alt="GitHub analytics">
+  <img src="./assets/stats.png?v=initial" width="100%" alt="GitHub analytics">
 </p>
 
 <p align="center">
@@ -63,7 +63,7 @@ Currently exploring **reinforcement learning and self-play**, while working on p
 </p>
 
 <p align="center">
-  <img src="./assets/year.svg?v=initial" width="100%" alt="GitHub contribution graph">
+  <img src="./assets/year.png?v=initial" width="100%" alt="GitHub contribution graph">
 </p>
 
 <p align="center">

@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="230">
-<rect width="1200" height="230" rx="24" fill="#0d0d12"/>
-<text x="600" y="112" text-anchor="middle" fill="#a78bfa" font-family="Arial" font-size="28" font-weight="700">CONTRIBUTION GRAPH</text>
-<text x="600" y="155" text-anchor="middle" fill="#9a9aa5" font-family="Arial" font-size="15">Run the profile workflow to generate live data</text>
-</svg>

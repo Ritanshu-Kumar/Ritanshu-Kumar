@@ -2,9 +2,8 @@ name: Refresh profile graphics
 
 on:
   schedule:
-    # Runs once a day at 03:00 UTC
-    - cron: "0 3 * * *"
-  workflow_dispatch: {}
+    - cron: "17 5 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -12,6 +11,7 @@ permissions:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,34 +19,53 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.x"
 
-      - name: Generate analytics + contribution graph
+      - name: Install Pillow
+        run: python -m pip install --quiet Pillow
+
+      - name: Generate analytics PNGs
         env:
-          # The default GITHUB_TOKEN cannot read contributionsCollection
-          # (it lacks the read:user scope). Use a personal access token
-          # stored as the STATS_TOKEN repo secret instead. See SETUP.md.
-          GITHUB_TOKEN: ${{ secrets.STATS_TOKEN }}
-          GH_LOGIN: Ritanshu-Kumar
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_LOGIN: ${{ github.repository_owner }}
         run: python scripts/generate_stats.py
 
-      - name: Bump cache-busting query strings in README
+      - name: Update README cache keys
+        shell: bash
         run: |
-          # GitHub proxies README images through its camo cache, keyed by
-          # URL. Without a changing query string, updated SVGs would never
-          # visibly refresh on the profile page.
-          STAMP=$(date -u +%Y%m%d%H%M%S)
-          sed -i -E "s/(stats\.svg)\?v=[A-Za-z0-9_-]+/\1?v=${STAMP}/" README.md
-          sed -i -E "s/(year\.svg)\?v=[A-Za-z0-9_-]+/\1?v=${STAMP}/" README.md
+          CACHE=$(date +%s)
+          python - <<'PY'
+          from pathlib import Path
+          import os, re
+
+          path = Path("README.md")
+          text = path.read_text(encoding="utf-8")
+          cache = os.environ["CACHE"]
+
+          text = re.sub(
+              r'assets/stats\.(?:svg|png)(?:\?v=\d+)?',
+              f'assets/stats.png?v={cache}',
+              text
+          )
+          text = re.sub(
+              r'assets/year\.(?:svg|png)(?:\?v=\d+)?',
+              f'assets/year.png?v={cache}',
+              text
+          )
+
+          path.write_text(text, encoding="utf-8")
+          PY
 
       - name: Commit and push if changed
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add assets/stats.svg assets/year.svg README.md
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: refresh profile analytics"
-            git push
+          if [ -z "$(git status --porcelain -- README.md assets/stats.png assets/year.png)" ]; then
+            echo "No analytics changes."
+            exit 0
           fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add README.md assets/stats.png assets/year.png
+          git commit -m "chore: refresh profile analytics"
+          git push
