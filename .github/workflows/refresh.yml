@@ -31,26 +31,28 @@ jobs:
         run: python scripts/generate_stats.py
 
       - name: Update README cache keys
-        shell: bash
+        env:
+          CACHE: ${{ github.run_id }}
         run: |
-          CACHE=$(date +%s)
           python - <<'PY'
           from pathlib import Path
-          import os, re
+          import os
+          import re
 
           path = Path("README.md")
           text = path.read_text(encoding="utf-8")
           cache = os.environ["CACHE"]
 
           text = re.sub(
-              r'assets/stats\.(?:svg|png)(?:\?v=\d+)?',
-              f'assets/stats.png?v={cache}',
-              text
+              r"assets/stats\.png\?v=[^\"')]+",
+              f"assets/stats.png?v={cache}",
+              text,
           )
+
           text = re.sub(
-              r'assets/year\.(?:svg|png)(?:\?v=\d+)?',
-              f'assets/year.png?v={cache}',
-              text
+              r"assets/year\.png\?v=[^\"')]+",
+              f"assets/year.png?v={cache}",
+              text,
           )
 
           path.write_text(text, encoding="utf-8")
