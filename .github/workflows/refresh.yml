@@ -1,0 +1,52 @@
+name: Refresh profile graphics
+
+on:
+  schedule:
+    # Runs once a day at 03:00 UTC
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate analytics + contribution graph
+        env:
+          # The default GITHUB_TOKEN cannot read contributionsCollection
+          # (it lacks the read:user scope). Use a personal access token
+          # stored as the STATS_TOKEN repo secret instead. See SETUP.md.
+          GITHUB_TOKEN: ${{ secrets.STATS_TOKEN }}
+          GH_LOGIN: Ritanshu-Kumar
+        run: python scripts/generate_stats.py
+
+      - name: Bump cache-busting query strings in README
+        run: |
+          # GitHub proxies README images through its camo cache, keyed by
+          # URL. Without a changing query string, updated SVGs would never
+          # visibly refresh on the profile page.
+          STAMP=$(date -u +%Y%m%d%H%M%S)
+          sed -i -E "s/(stats\.svg)\?v=[A-Za-z0-9_-]+/\1?v=${STAMP}/" README.md
+          sed -i -E "s/(year\.svg)\?v=[A-Za-z0-9_-]+/\1?v=${STAMP}/" README.md
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add assets/stats.svg assets/year.svg README.md
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: refresh profile analytics"
+            git push
+          fi
