@@ -55,7 +55,7 @@ From training models to building usable applications, I like turning ideas into 
 </p>
 
 <p align="center">
-  <img src="./assets/stats.png?v=38883491999" width="100%" alt="GitHub analytics">
+  <img src="./assets/stats.png?v=39021019718" width="100%" alt="GitHub analytics">
 </p>
 
 <p align="center">
@@ -63,7 +63,7 @@ From training models to building usable applications, I like turning ideas into 
 </p>
 
 <p align="center">
-  <img src="./assets/year.png?v=38883491999" width="100%" alt="GitHub contribution graph">
+  <img src="./assets/year.png?v=39021019718" width="100%" alt="GitHub contribution graph">
 </p>
 
 <p align="center">
